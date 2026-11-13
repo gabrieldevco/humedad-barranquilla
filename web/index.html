@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Humedad Barranquilla - Arbol de decision</title>
+<style>
+  html, body { background: #111315; color: #e6e6e6; margin: 0; font-family: "Segoe UI", Arial, Helvetica, sans-serif; }
+  .contenedor { max-width: 1100px; margin: 0 auto; padding: 0 16px 30px; }
+
+  .titulo { background: #181a1d; border-bottom: 3px solid #e53935; }
+  .titulo .contenedor { padding-bottom: 0; }
+  .titulo h1 { font-size: 24px; margin: 0; padding: 18px 0 2px; }
+  .titulo p { margin: 0; padding: 0 0 14px; color: #9aa0a6; font-size: 14px; }
+
+  /* barra de filtros fija arriba */
+  .filtros { position: sticky; top: 0; z-index: 10; background: rgba(24, 26, 29, .97); border-bottom: 1px solid #2c2f33; padding: 10px 0; }
+  .filtros .contenedor { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; padding-bottom: 0; }
+  .filtros label { flex: 1; min-width: 220px; font-size: 14px; color: #bbb; }
+  .filtros label b { color: #fff; font-size: 16px; }
+  input[type=range] { width: 100%; accent-color: #e53935; cursor: pointer; margin-top: 6px; }
+
+  /* indicadores de arriba */
+  .indicadores { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 18px; }
+  .indicador { background: #1b1d20; border: 1px solid #2c2f33; border-radius: 10px; padding: 14px 16px; }
+  .indicador .nombre { font-size: 12px; color: #9aa0a6; text-transform: uppercase; letter-spacing: .05em; }
+  .indicador .numero { font-size: 26px; font-weight: bold; margin-top: 4px; }
+  .indicador .sub { font-size: 12px; color: #9aa0a6; }
+  @media (max-width: 760px) {
+    .indicadores { grid-template-columns: 1fr 1fr; }
+    .filtros .contenedor { gap: 4px 16px; }
+    .filtros label { min-width: 140px; }
+  }
+
+  .tarjeta { background: #1b1d20; border: 1px solid #2c2f33; border-radius: 10px; margin-top: 18px; overflow: hidden; }
+  .tarjeta h2 { font-size: 16px; margin: 0; padding: 12px 16px; border-bottom: 1px solid #2c2f33; color: #fff; border-left: 4px solid #e53935; }
+  .tarjeta .cuerpo { padding: 16px; }
+  .fila { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+  .barra .largo { width: 120px; }
+  #resultados .num { width: 58px; white-space: nowrap; }
+  .fila > .tarjeta { flex: 1; min-width: 300px; }
+  .gris { color: #9aa0a6; font-size: 13px; line-height: 1.5; }
+  .clase { font-size: 28px; font-weight: bold; }
+  .Baja { color: #ff9f43; }
+  .Media { color: #2ecc71; }
+  .Alta { color: #54a0ff; }
+
+  /* gota que se llena segun la humedad real */
+  .conGota { display: flex; gap: 22px; align-items: center; }
+  .conGota > div:last-child { flex: 1; }
+  #gota { width: 96px; flex-shrink: 0; }
+  #nivel { transition: transform .7s ease; }
+  #agua { transition: fill .7s; }
+  .ola { animation: ola 3s linear infinite; }
+  .burbuja { animation: sube 4s ease-in infinite; opacity: 0; }
+  @keyframes ola { from { transform: translateX(0); } to { transform: translateX(-100px); } }
+  @keyframes sube { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: .6; } 100% { transform: translateY(-70px); opacity: 0; } }
+
+  /* barras de porcentaje */
+  .barra { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 14px; }
+  .barra .nombre { width: 70px; }
+  .barra .fondo { flex: 1; background: #2a2d31; height: 14px; border-radius: 7px; overflow: hidden; }
+  .barra .relleno { height: 14px; border-radius: 7px; transition: width .3s; }
+  .barra .num { width: 45px; text-align: right; }
+
+  table { border-collapse: collapse; }
+  td, th { border: 1px solid #34383d; padding: 8px 14px; text-align: center; }
+  th { background: #23262a; font-weight: normal; }
+  ol { line-height: 1.7; }
+  code { background: #23262a; padding: 1px 5px; border-radius: 3px; }
+  button { background: #e53935; color: #fff; border: 0; border-radius: 6px; padding: 7px 16px; font-size: 14px; cursor: pointer; }
+  button:hover { background: #c62828; }
+  select { background: #23262a; color: #eee; border: 1px solid #3a3e43; border-radius: 4px; padding: 5px; }
+
+  /* cuadro que aparece al pasar el mouse */
+  #tip { position: fixed; display: none; background: #000; color: #fff; border: 1px solid #e53935; border-radius: 6px; padding: 7px 10px; font-size: 13px; pointer-events: none; z-index: 200; max-width: 300px; line-height: 1.4; }
+  .celda { cursor: default; }
+  .celda { width: 90px; height: 56px; font-size: 20px; font-weight: bold; }
+  .celda small { display: block; color: #ddd; font-size: 11px; font-weight: normal; }
+  .total { color: #9aa0a6; font-size: 14px; }
+
+  /* visor del arbol en grande */
+  #visor { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #0b0b0b; z-index: 100; overflow: auto; }
+  #visor button { position: fixed; top: 10px; right: 15px; z-index: 101; }
+</style>
+</head>
+<body>
+
+<div class="titulo"><div class="contenedor"><h1>Predicción de humedad relativa en Barranquilla</h1><p>Proyecto final · Árbol de decisión · Datos del IDEAM, estación Escuela Naval</p></div></div>
+
+<div class="filtros">
+  <div class="contenedor">
+    <label>Hora: <b id="txtHora"></b><br><input type="range" id="hora" min="0" max="23" value="14"></label>
+    <label>Mes: <b id="txtMes"></b><br><input type="range" id="mes" min="1" max="12" value="8"></label>
+    <div>Árbol: <b id="barraClase"></b><br><span class="gris">Real: <span id="barraReal"></span></span></div>
+  </div>
+</div>
+
+<div class="contenedor">
+
+  <div class="indicadores">
+    <div class="indicador"><div class="nombre">El árbol dice</div><div class="numero" id="kClase"></div><div class="sub" id="kClaseSub"></div></div>
+    <div class="indicador"><div class="nombre">Humedad real</div><div class="numero" id="kReal"></div><div class="sub" id="kRealSub"></div></div>
+    <div class="indicador"><div class="nombre">Exactitud del modelo</div><div class="numero" id="kExac"></div><div class="sub">en los datos de prueba</div></div>
+    <div class="indicador"><div class="nombre">Datos de prueba</div><div class="numero" id="kPrueba"></div><div class="sub">mediciones que el árbol no vio</div></div>
+  </div>
+
+  <p class="gris" style="font-size: 14px; margin-top: 18px;">
+    Con los datos de humedad del aire del IDEAM (estación Escuela Naval Barranquilla)
+    entrenamos un árbol de decisión que predice si la humedad está <b class="Baja">Baja</b> (menos de 75 %),
+    <b class="Media">Media</b> (75 a 88 %) o <b class="Alta">Alta</b> (88 % o más) con la hora y el mes,
+    que salen de la columna FechaObservacion del CSV.
+  </p>
+
+  <div class="fila">
+    <div class="tarjeta">
+      <h2>Predicción del árbol</h2>
+      <div class="cuerpo">
+        <div class="clase" id="clase"></div>
+        <div id="barrasArbol"></div>
+        <div class="gris" id="detalle"></div>
+      </div>
+    </div>
+    <div class="tarjeta">
+      <h2>Datos reales de ese mes y esa hora</h2>
+      <div class="cuerpo">
+        <div class="conGota">
+          <svg id="gota" viewBox="0 0 100 130">
+            <title>La gota se llena según la humedad promedio real de ese mes y esa hora</title>
+            <defs><clipPath id="formaGota"><path d="M50 4 C50 4 10 56 10 86 A40 40 0 0 0 90 86 C90 56 50 4 50 4 Z"/></clipPath></defs>
+            <g clip-path="url(#formaGota)">
+              <rect width="100" height="130" fill="#2a2d31"/>
+              <g id="nivel"><g id="agua">
+                <path class="ola" d="M-100 0 Q-75 -7 -50 0 T0 0 T50 0 T100 0 T150 0 T200 0 V140 H-100 Z"/>
+              </g></g>
+              <circle class="burbuja" cx="38" cy="118" r="3" fill="#fff"/>
+              <circle class="burbuja" cx="60" cy="122" r="2" fill="#fff" style="animation-delay: 1.5s"/>
+              <circle class="burbuja" cx="50" cy="115" r="2.5" fill="#fff" style="animation-delay: 2.8s"/>
+            </g>
+            <path d="M50 4 C50 4 10 56 10 86 A40 40 0 0 0 90 86 C90 56 50 4 50 4 Z" fill="none" stroke="#555" stroke-width="2"/>
+          </svg>
+          <div>
+            <div class="clase" id="promReal"></div>
+            <div id="barrasReal"></div>
+          </div>
+        </div>
+        <div class="gris" id="detalleReal"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Árbol de decisión (max_depth = 4) - en rojo el camino de la predicción</h2>
+    <div class="cuerpo">
+      <div id="arbol"></div>
+      <p class="gris"><button onclick="ampliarArbol()" style="float: right; margin-left: 12px;">Ampliar árbol</button>
+        Cada cuadro es una pregunta. Si la respuesta es sí se baja por la izquierda y si es no por la derecha.
+        En value van cuántas mediciones hay de cada clase en ese orden: [Alta, Baja, Media].</p>
+      <p id="resumenCamino" style="clear: both; background: #23262a; border-left: 4px solid #e53935; padding: 10px 14px; border-radius: 6px;"></p>
+      <p style="margin-bottom: 4px;">El camino paso a paso (el mismo que está en rojo):</p>
+      <ol id="camino" style="margin-top: 0;"></ol>
+    </div>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Humedad promedio por hora en <span id="txtMes2"></span> (datos reales)</h2>
+    <div class="cuerpo">
+      <div id="graficaHora"></div>
+      <p class="gris">Rojo: mes escogido. Gris: promedio de todo el año. Punteadas: 75 % y 88 %. Pasa el mouse para ver los valores y dale clic para escoger esa hora.</p>
+    </div>
+  </div>
+
+  <div class="fila">
+    <div class="tarjeta">
+      <h2>Matriz de confusión</h2>
+      <div class="cuerpo">
+        <p class="gris" style="margin-top: 0;">Se calcula con las <b>mediciones de prueba</b>: el 25 % de los datos (2.500 mediciones) que separamos con
+          <code>train_test_split</code> y que el árbol <b>no vio al entrenar</b>. Así se mide qué tan bien predice datos nuevos.</p>
+        Ver: <select id="filtro">
+          <option value="todo">Todos los datos de prueba</option>
+          <option value="hora">Solo la hora escogida</option>
+          <option value="mes" selected>Solo el mes escogido</option>
+          <option value="ambos">La hora y el mes escogidos</option>
+        </select>
+        <table id="matriz" style="margin-top: 10px;"></table>
+        <p id="exactitudFiltro"></p>
+        <p class="gris">Cada fila es lo que era en realidad y cada columna lo que dijo el árbol. La diagonal (verde) son los aciertos. El porcentaje es sobre el total de la fila. Pasa el mouse por una casilla para ver qué significa.</p>
+        <div id="porClase"></div>
+        <p class="gris" id="notaFiltro"></p>
+      </div>
+    </div>
+    <div class="tarjeta">
+      <h2>Resultados generales (del modelo completo, no cambian con la hora ni el mes)</h2>
+      <div class="cuerpo" id="resultados"></div>
+    </div>
+  </div>
+
+  <p class="gris">Datos: datos.gov.co - Humedad del Aire (IDEAM).</p>
+</div>
+
+<div id="tip"></div>
+
+<!-- arbol en grande -->
+<div id="visor">
+  <button onclick="cerrarArbol()">Cerrar ✕</button>
+  <div id="arbolGrande" style="width: 2600px; padding: 60px 20px 20px;"></div>
+</div>
+
+<script src="model.js"></script>
+<script>
+var meses = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+var colores = { Baja: "#ff9f43", Media: "#2ecc71", Alta: "#54a0ff" };
+var orden = ["Baja", "Media", "Alta"];
+
+function textoHora(h) {
+  if (h == 0) return "12 a. m.";
+  if (h == 12) return "12 m.";
+  if (h < 12) return h + " a. m.";
+  return (h - 12) + " p. m.";
+}
+
+function claseDe(humedad) {
+  if (humedad < 75) return "Baja";
+  if (humedad < 88) return "Media";
+  return "Alta";
+}
+
+// porcentajes de un nodo del arbol (MODEL.clases viene en orden Alta, Baja, Media)
+function porcentajes(nodo) {
+  var p = {};
+  for (var i = 0; i < MODEL.clases.length; i++) p[MODEL.clases[i]] = Math.round(nodo.p[i] * 100);
+  return p;
+}
+function claseNodo(nodo) {
+  var p = porcentajes(nodo);
+  var c = "Baja";
+  if (p.Media > p[c]) c = "Media";
+  if (p.Alta > p[c]) c = "Alta";
+  return c;
+}
+
+// barras de porcentaje hechas con divs
+function barras(p) {
+  var html = "";
+  for (var i = 0; i < orden.length; i++) {
+    var c = orden[i];
+    html += '<div class="barra"><span class="nombre ' + c + '">' + c + '</span>' +
+            '<div class="fondo"><div class="relleno" style="width:' + p[c] + '%; background:' + colores[c] + '"></div></div>' +
+            '<span class="num">' + p[c] + ' %</span></div>';
+  }
+  return html;
+}
+
+// ---------- cuadro de ayuda al pasar el mouse ----------
+function mostrarTip(e, html) {
+  var tip = document.getElementById("tip");
+  tip.innerHTML = html;
+  tip.style.display = "block";
+  var x = e.clientX + 14, y = e.clientY + 14;
+  if (x + 300 > window.innerWidth) x = e.clientX - 310;
+  tip.style.left = x + "px";
+  tip.style.top = y + "px";
+}
+function ocultarTip() { document.getElementById("tip").style.display = "none"; }
+
+// ---------- dibujo del arbol en SVG (como plot_tree) ----------
+function lineasNodo(n) {
+  var v = n.v;   // cantidad de cada clase, exportada del notebook
+  var l = [];
+  if (n.f) l.push(n.f + " <= " + n.t);
+  l.push("gini = " + n.g);
+  l.push("samples = " + n.n);
+  l.push("value = [" + v.join(", ") + "]");
+  l.push("class = " + claseNodo(n));
+  return l;
+}
+
+function dibujarArbol(enCamino) {
+  var ancho = 1320, alto = 640, dy = 118, lh = 14.5;
+  var svg = '<svg viewBox="0 0 ' + ancho + ' ' + alto + '" width="100%" style="font-family: monospace;">';
+  var lineas = "", cajas = "";
+
+  function dib(n, nivel, i, px, py, izq) {
+    var cx, y, w;
+    if (nivel <= 3) {
+      cx = 40 + (i + 0.5) * 1240 / Math.pow(2, nivel);
+      y = 8 + nivel * dy;
+      w = nivel < 3 ? 204 : 150;
+    } else {
+      // ultimo nivel: las hojas van escalonadas para que quepan (arriba True, abajo False)
+      cx = px + (izq ? -38 : 38);
+      w = 146;
+      y = izq ? 8 + 4 * dy - 10 : 8 + 4 * dy + 4 * lh + 8;
+    }
+    var texto = lineasNodo(n);
+    var h = texto.length * lh + 10;
+    var activo = enCamino.indexOf(n) >= 0;
+    var c = claseNodo(n);
+
+    if (px != null) {
+      var x1 = nivel == 4 ? cx : px;
+      lineas += '<line x1="' + x1 + '" y1="' + py + '" x2="' + cx + '" y2="' + y + '" stroke="' + (activo ? "#e53935" : "#555") + '" stroke-width="' + (activo ? 3 : 1) + '"/>';
+      if (nivel == 1) lineas += '<text x="' + ((px + cx) / 2) + '" y="' + ((py + y) / 2 - 4) + '" fill="#aaa" font-size="12" text-anchor="middle">' + (izq ? "True" : "False") + '</text>';
+    }
+    var ayuda = (n.f ? "Pregunta: " + n.f + " <= " + n.t + "\n" : "Hoja\n") + "Llegaron " + n.n + " mediciones de entrenamiento\n" +
+      "Alta " + n.v[0] + ", Baja " + n.v[1] + ", Media " + n.v[2] + "\nGini " + n.g + " · Clase " + c;
+    cajas += '<g opacity="' + (activo ? 1 : 0.45) + '"><title>' + ayuda.replace(/</g, "&lt;") + '</title>' +
+      '<rect x="' + (cx - w / 2) + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="4" fill="' + colores[c] + '" fill-opacity="0.25" stroke="' + (activo ? "#e53935" : "#666") + '" stroke-width="' + (activo ? 3 : 1) + '"/>';
+    for (var k = 0; k < texto.length; k++) {
+      var t = texto[k].replace("<", "&lt;");
+      cajas += '<text x="' + cx + '" y="' + (y + 16 + k * lh) + '" fill="#fff" font-size="' + (nivel < 3 ? 11.5 : 10.2) + '" text-anchor="middle"' + (k == 0 && n.f ? ' font-weight="bold"' : '') + '>' + t + '</text>';
+    }
+    cajas += '</g>';
+    if (n.f) {
+      dib(n.l, nivel + 1, i * 2, cx, y + h, true);
+      dib(n.r, nivel + 1, i * 2 + 1, cx, y + h, false);
+    }
+  }
+  dib(MODEL.arbol, 0, 0, null, null, null);
+  return svg + lineas + cajas + '</svg>';
+}
+
+// ---------- grafica de humedad por hora (SVG) ----------
+function graficaHora(mes, hora) {
+  var w = 1000, h = 280, izq = 40, abajo = 30, arriba = 10;
+  function x(i) { return izq + i * (w - izq - 10) / 23; }
+  function y(v) { return arriba + (100 - v) * (h - arriba - abajo) / 40; }   // eje de 60 a 100
+  var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%">';
+  for (var v = 60; v <= 100; v += 10) {
+    svg += '<line x1="' + izq + '" x2="' + (w - 10) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="#333"/>';
+    svg += '<text x="' + (izq - 6) + '" y="' + (y(v) + 4) + '" fill="#999" font-size="11" text-anchor="end">' + v + '</text>';
+  }
+  [75, 88].forEach(function (v) {
+    svg += '<line x1="' + izq + '" x2="' + (w - 10) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="#888" stroke-dasharray="5 5"/>';
+  });
+  for (var i = 0; i < 24; i += 2) svg += '<text x="' + x(i) + '" y="' + (h - 10) + '" fill="#999" font-size="11" text-anchor="middle">' + i + 'h</text>';
+  var anio = "", delMes = "";
+  for (var i = 0; i < 24; i++) {
+    anio += x(i) + "," + y(MODEL.promedio_hora[i]) + " ";
+    delMes += x(i) + "," + y(MODEL.reales[mes - 1][i][0]) + " ";
+  }
+  svg += '<polyline points="' + anio + '" fill="none" stroke="#777" stroke-width="2"/>';
+  svg += '<polyline points="' + delMes + '" fill="none" stroke="#e53935" stroke-width="2.5"/>';
+  svg += '<circle cx="' + x(hora) + '" cy="' + y(MODEL.reales[mes - 1][hora][0]) + '" r="7" fill="#fff" stroke="#e53935" stroke-width="3"/>';
+  svg += '<line id="lineaMouse" x1="0" x2="0" y1="' + arriba + '" y2="' + (h - abajo) + '" stroke="#fff" stroke-opacity="0" />';
+  // rectangulo invisible encima para detectar el mouse
+  svg += '<rect x="' + izq + '" y="0" width="' + (w - izq - 10) + '" height="' + (h - abajo) + '" fill="transparent" style="cursor: pointer;" ' +
+         'onmousemove="mouseGrafica(evt, ' + mes + ')" onmouseleave="salirGrafica()" onclick="clicGrafica(evt)"/>';
+  return svg + '</svg>';
+}
+
+// hora segun la posicion del mouse en la grafica
+function horaDelMouse(evt) {
+  var svg = evt.target.ownerSVGElement;
+  var caja = svg.getBoundingClientRect();
+  var xSvg = (evt.clientX - caja.left) * 1000 / caja.width;
+  var hora = Math.round((xSvg - 40) * 23 / (1000 - 40 - 10));
+  return Math.max(0, Math.min(23, hora));
+}
+function mouseGrafica(evt, mes) {
+  var hora = horaDelMouse(evt);
+  var r = MODEL.reales[mes - 1][hora];
+  var x = 40 + hora * (1000 - 40 - 10) / 23;
+  var linea = document.getElementById("lineaMouse");
+  linea.setAttribute("x1", x); linea.setAttribute("x2", x); linea.setAttribute("stroke-opacity", 0.4);
+  mostrarTip(evt, "<b>" + textoHora(hora) + "</b><br>" +
+    meses[mes - 1] + ": <b>" + r[0] + " %</b> (" + claseDe(r[0]) + ")<br>" +
+    "Promedio del año: " + MODEL.promedio_hora[hora] + " %<br>" +
+    "Baja " + r[2] + " % · Media " + r[3] + " % · Alta " + r[4] + " %<br>" +
+    "<span style='color:#aaa'>" + r[1] + " mediciones reales</span>");
+}
+function salirGrafica() {
+  ocultarTip();
+  var linea = document.getElementById("lineaMouse");
+  if (linea) linea.setAttribute("stroke-opacity", 0);
+}
+function clicGrafica(evt) {
+  document.getElementById("hora").value = horaDelMouse(evt);
+  actualizar();
+}
+
+// ---------- matriz de confusion con los datos de prueba filtrados ----------
+function matriz(hora, mes) {
+  var filtro = document.getElementById("filtro").value;
+  var m = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  var total = 0, aciertos = 0;
+  for (var i = 0; i < MODEL.prueba.length; i++) {
+    var r = MODEL.prueba[i];   // [hora, mes, real, predicho]
+    if (filtro == "hora" && r[0] != hora) continue;
+    if (filtro == "mes" && r[1] != mes) continue;
+    if (filtro == "ambos" && (r[0] != hora || r[1] != mes)) continue;
+    m[r[2]][r[3]]++;
+    total++;
+    if (r[2] == r[3]) aciertos++;
+  }
+  // casilla con mas mediciones, para dar la intensidad del color
+  var maximo = 1;
+  for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) if (m[i][j] > maximo) maximo = m[i][j];
+
+  var tabla = '<tr><th rowspan="2">En realidad era</th><th colspan="3">El árbol dijo</th><th rowspan="2">Total</th></tr>' +
+              '<tr><th class="Baja">Baja</th><th class="Media">Media</th><th class="Alta">Alta</th></tr>';
+  var porClase = "";
+  var totalCol = [0, 0, 0];
+  for (var i = 0; i < 3; i++) {
+    var totalFila = m[i][0] + m[i][1] + m[i][2];
+    tabla += '<tr><th class="' + orden[i] + '">' + orden[i] + '</th>';
+    for (var j = 0; j < 3; j++) {
+      totalCol[j] += m[i][j];
+      var pct = totalFila == 0 ? 0 : Math.round(m[i][j] * 100 / totalFila);
+      // verde para aciertos y rojo para errores, mas fuerte entre mas mediciones; vacio si es 0
+      var fondo = "transparent";
+      if (m[i][j] > 0) fondo = (i == j ? "rgba(46, 204, 113, " : "rgba(229, 57, 53, ") + (0.15 + 0.6 * m[i][j] / maximo) + ")";
+      var ayuda = totalFila == 0 ? "No hay mediciones que en realidad fueran " + orden[i] + " con este filtro." :
+                  "De las " + totalFila + " mediciones que en realidad eran <b>" + orden[i] + "</b>, el árbol dijo <b>" + orden[j] + "</b> en " + m[i][j] + " (" + pct + " %)." +
+                  (i == j ? "<br><span style='color:#2ecc71'>Acierto</span>" : "<br><span style='color:#e57373'>Error</span>");
+      tabla += '<td class="celda" style="background:' + fondo + '" onmousemove="mostrarTip(event, \'' + ayuda.replace(/'/g, "") + '\')" onmouseleave="ocultarTip()">' +
+               m[i][j] + '<small>' + (totalFila == 0 ? "-" : pct + ' %') + '</small></td>';
+    }
+    tabla += '<td class="total">' + totalFila + '</td></tr>';
+    porClase += '<span class="' + orden[i] + '">' + orden[i] + '</span>: ' +
+                (totalFila == 0 ? 'no hay datos' : 'acertó ' + m[i][i] + ' de ' + totalFila + ' (' + Math.round(m[i][i] * 100 / totalFila) + ' %)') + '<br>';
+  }
+  tabla += '<tr><th>Total</th><td class="total">' + totalCol[0] + '</td><td class="total">' + totalCol[1] + '</td><td class="total">' + totalCol[2] + '</td><td class="total"><b>' + total + '</b></td></tr>';
+  document.getElementById("porClase").innerHTML = porClase;
+  document.getElementById("notaFiltro").innerHTML = filtro == "todo" ? "" :
+    (filtro == "ambos" ? "Ojo: con la hora y el mes juntos hay muy pocas mediciones de prueba (unas 9), así que esos porcentajes no son confiables. Es mejor ver solo el mes o solo la hora." : filtro == "hora" ? "A una misma hora el árbol casi siempre dice la misma clase, por eso casi todo cae en una columna." : "");
+  document.getElementById("matriz").innerHTML = tabla;
+  document.getElementById("exactitudFiltro").innerHTML = total == 0 ? "No hay datos de prueba con ese filtro." :
+    "Exactitud: <b>" + (aciertos * 100 / total).toFixed(1) + " %</b> (" + aciertos + " de " + total + " mediciones)";
+}
+
+// la pregunta del arbol en palabras normales
+function preguntaTexto(nodo) {
+  if (nodo.f == "HORA") return "¿La hora es antes de las " + textoHora(Math.floor(nodo.t) + 1) + "?";
+  var m = Math.floor(nodo.t);
+  return "¿El mes es " + meses[m - 1].toLowerCase() + " o antes?";
+}
+
+// rango en palabras, para el resumen del camino
+function rangoHoras(a, b) {
+  if (a == 0 && b == 23) return "";
+  if (a == b) return "a las " + textoHora(a);
+  if (a == 0) return "antes de las " + textoHora(b + 1);
+  if (b == 23) return "desde las " + textoHora(a);
+  return "entre las " + textoHora(a) + " y las " + textoHora(b + 1);
+}
+function rangoMeses(a, b) {
+  if (a == 1 && b == 12) return "";
+  if (a == b) return "en " + meses[a - 1].toLowerCase();
+  return "entre " + meses[a - 1].toLowerCase() + " y " + meses[b - 1].toLowerCase();
+}
+
+// ---------- todo se recalcula al mover los slicers ----------
+var caminoActual = [];
+function actualizar() {
+  var hora = parseInt(document.getElementById("hora").value);
+  var mes = parseInt(document.getElementById("mes").value);
+  document.getElementById("txtHora").innerHTML = textoHora(hora);
+  document.getElementById("txtMes").innerHTML = meses[mes - 1];
+  document.getElementById("txtMes2").innerHTML = meses[mes - 1].toLowerCase();
+
+  // recorrer el arbol exportado del notebook hasta una hoja
+  var datos = { HORA: hora, NUM_MES: mes };
+  var nodo = MODEL.arbol;
+  var camino = "";
+  caminoActual = [nodo];
+  var h1 = 0, h2 = 23, m1 = 1, m2 = 12;
+  while (nodo.f) {
+    var si = datos[nodo.f] <= nodo.t;
+    var corte = Math.floor(nodo.t);
+    if (nodo.f == "HORA") { if (si) h2 = Math.min(h2, corte); else h1 = Math.max(h1, corte + 1); }
+    else { if (si) m2 = Math.min(m2, corte); else m1 = Math.max(m1, corte + 1); }
+    camino += "<li>" + preguntaTexto(nodo) + " <b>" + (si ? "Sí" : "No") + "</b> <span class='gris'>(" + nodo.f + " &lt;= " + nodo.t + ")</span></li>";
+    nodo = si ? nodo.l : nodo.r;
+    caminoActual.push(nodo);
+  }
+  camino += "<li>Con esas respuestas quedan " + nodo.n + " mediciones parecidas de las que usamos para entrenar, y " + porcentajes(nodo)[claseNodo(nodo)] + " % de ellas eran <b class='" + claseNodo(nodo) + "'>" + claseNodo(nodo) + "</b>. Por eso el árbol dice " + claseNodo(nodo) + ".</li>";
+  var cuando = [rangoHoras(h1, h2), rangoMeses(m1, m2)].filter(function (x) { return x != ""; }).join(" y ");
+  document.getElementById("resumenCamino").innerHTML = "En " + meses[mes - 1].toLowerCase() + " a las " + textoHora(hora) + " el árbol dice <b class='" + claseNodo(nodo) + "'>" + claseNodo(nodo) + "</b>" +
+    " porque en los datos, " + cuando + ", lo más común fue humedad " + claseNodo(nodo).toLowerCase() + " (" + porcentajes(nodo)[claseNodo(nodo)] + " % de las veces).";
+
+  var p = porcentajes(nodo);
+  var clase = claseNodo(nodo);
+  document.getElementById("clase").innerHTML = clase;
+  document.getElementById("clase").className = "clase " + clase;
+  document.getElementById("barrasArbol").innerHTML = barras(p);
+  document.getElementById("detalle").innerHTML = "Humedad promedio en la hoja: " + nodo.h + " % (" + nodo.n + " mediciones de entrenamiento)";
+  document.getElementById("camino").innerHTML = camino;
+
+  // datos reales de ese mes y esa hora (calculados en el notebook con todos los datos limpios)
+  var r = MODEL.reales[mes - 1][hora];   // [promedio, cantidad, % baja, % media, % alta]
+  var claseReal = claseDe(r[0]);
+  document.getElementById("promReal").innerHTML = r[0] + " % (" + claseReal + ")";
+  document.getElementById("promReal").className = "clase " + claseReal;
+  // la gota se llena hasta el porcentaje de humedad real (la gota mide de y=4 a y=126)
+  document.getElementById("nivel").style.transform = "translateY(" + (126 - r[0] / 100 * 122) + "px)";
+  document.getElementById("agua").style.fill = colores[claseReal];
+  document.getElementById("barrasReal").innerHTML = barras({ Baja: r[2], Media: r[3], Alta: r[4] });
+  document.getElementById("detalleReal").innerHTML = "Calculado con " + r[1] + " mediciones reales de " + meses[mes - 1].toLowerCase() + " a las " + textoHora(hora);
+
+  document.getElementById("kClase").innerHTML = clase;
+  document.getElementById("kClase").className = "numero " + clase;
+  document.getElementById("kClaseSub").innerHTML = p[clase] + " % de su hoja";
+  document.getElementById("kReal").innerHTML = r[0] + " %";
+  document.getElementById("kReal").className = "numero " + claseReal;
+  document.getElementById("kRealSub").innerHTML = claseReal + " · " + meses[mes - 1].toLowerCase() + ", " + textoHora(hora);
+  document.getElementById("barraClase").innerHTML = clase;
+  document.getElementById("barraClase").className = clase;
+  document.getElementById("barraReal").innerHTML = r[0] + " % (" + claseReal + ")";
+
+  document.getElementById("arbol").innerHTML = dibujarArbol(caminoActual);
+  if (document.getElementById("visor").style.display == "block") {
+    document.getElementById("arbolGrande").innerHTML = dibujarArbol(caminoActual);
+  }
+  document.getElementById("graficaHora").innerHTML = graficaHora(mes, hora);
+  matriz(hora, mes);
+}
+
+function ampliarArbol() {
+  var visor = document.getElementById("visor");
+  document.getElementById("arbolGrande").innerHTML = dibujarArbol(caminoActual);
+  visor.style.display = "block";
+  visor.scrollLeft = (visor.scrollWidth - visor.clientWidth) / 2;   // empieza en la raiz
+}
+function cerrarArbol() {
+  document.getElementById("visor").style.display = "none";
+}
+document.addEventListener("keydown", function (e) { if (e.key == "Escape") cerrarArbol(); });
+
+document.getElementById("hora").oninput = actualizar;
+document.getElementById("mes").oninput = actualizar;
+document.getElementById("filtro").onchange = actualizar;
+actualizar();
+
+document.getElementById("kExac").innerHTML = (MODEL.precision * 100).toFixed(1) + " %";
+document.getElementById("kPrueba").innerHTML = MODEL.meta.test;
+
+// resultados generales del notebook
+function barraSola(nombre, valor, color) {
+  return '<div class="barra"><span class="nombre largo">' + nombre + '</span>' +
+         '<div class="fondo"><div class="relleno" style="width:' + valor + '%; background:' + color + '"></div></div>' +
+         '<span class="num">' + valor + ' %</span></div>';
+}
+var impHora = (MODEL.importancias.HORA * 100).toFixed(1), impMes = (MODEL.importancias.NUM_MES * 100).toFixed(1);
+document.getElementById("resultados").innerHTML =
+  "<p style='margin-top:0'><b>¿Qué tanto acierta?</b></p>" +
+  barraSola("Con el árbol", (MODEL.precision * 100).toFixed(1), "#e53935") +
+  barraSola("Sin árbol", (MODEL.precision_base * 100).toFixed(1), "#777") +
+  "<p class='gris'>De las " + MODEL.meta.test + " mediciones de prueba el árbol acertó " + Math.round(MODEL.precision * MODEL.meta.test) + ". " +
+  "\"Sin árbol\" es la comparación más sencilla: si no tuviéramos modelo y respondiéramos siempre Media, que es la clase que más se repite, acertaríamos " + Math.round(MODEL.precision_base * MODEL.meta.test) + ". El árbol tiene que ganarle a eso para que valga la pena, y le gana por casi 12 puntos.</p>" +
+  "<p><b>¿Qué pesa más para decidir?</b></p>" +
+  barraSola("La hora", impHora, "#e53935") +
+  barraSola("El mes", impMes, "#777") +
+  "<p class='gris'>La humedad cambia mucho más entre la madrugada y la tarde que entre un mes y otro. Por eso al mover el mes cambian los datos reales y la matriz, pero la predicción del árbol casi siempre queda igual.</p>" +
+  "<p><b>¿Por qué no acierta más?</b></p>" +
+  "<p class='gris'>Porque solo con la hora y el mes no se puede saber todo: un día que llueve la humedad sube a cualquier hora. Casi todos los errores son entre clases vecinas (Media con Alta o Baja con Media).</p>" +
+  "<p class='gris'>El primer árbol que hicimos en Colab daba " + Math.round(MODEL.precision_original * 100) + " %, pero usaba la misma humedad con la que se saca la clase, así que no estaba prediciendo nada.</p>";
+</script>
+</body>
+</html>
